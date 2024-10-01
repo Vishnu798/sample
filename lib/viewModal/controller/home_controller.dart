@@ -1,4 +1,5 @@
-import 'package:flutter/widgets.dart';
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:inditab_task/modal/modals/event_model.dart';
 import 'package:inditab_task/modal/repository/event_repository.dart';
@@ -10,6 +11,7 @@ class HomePageController extends GetxController {
   final EventRepository _repository = EventRepository();
   RxString sortDataValue = "Sort by".obs;
   TextEditingController textEditingController = TextEditingController(text: "");
+  RxBool isDarkModeEnable = false.obs;
   List<String> items = [
     'Sort by',
     'Day',
@@ -33,6 +35,8 @@ class HomePageController extends GetxController {
   RxInt selectedDate = 0.obs;
   RxString selectedMonth = "".obs;
   RxBool isFetched = false.obs;
+  RxBool isInternetAvailable = true.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -40,6 +44,10 @@ class HomePageController extends GetxController {
   }
 
   Future<void> getData() async {
+    isFetched.value = false;
+    isInternetAvailable.value = true;
+    data.value = [];
+    checkUserConnection();
     sortDataValue.value = "Sort by";
     List<Data> dataList = await _repository.getData();
     if (dataList.isNotEmpty) {
@@ -50,58 +58,59 @@ class HomePageController extends GetxController {
   }
 
   void fliterDataByWeek(DateTime date) {
-    // data.value = [];
     isFetched.value = false;
+    data.value = [];
     int curTime = date.millisecondsSinceEpoch;
-    int currentTimeAfterWeek =
+    int timeAfterWeek =
         date.add(const Duration(days: 7)).millisecondsSinceEpoch;
-    selectedDate.value = currentTimeAfterWeek;
+    selectedDate.value = timeAfterWeek;
     textEditingController.text =
-        '${DateFormat('d MMM, y').format(DateTime.fromMillisecondsSinceEpoch(curTime))} to ${DateFormat('d MMM, y').format(DateTime.fromMillisecondsSinceEpoch(currentTimeAfterWeek))}';
-    List<Data> sortdData = [];
+        '${DateFormat('d MMM, y').format(DateTime.fromMillisecondsSinceEpoch(curTime))} to ${DateFormat('d MMM, y').format(DateTime.fromMillisecondsSinceEpoch(timeAfterWeek))}';
+
     for (int i = 0; i < dataView.length; i++) {
-      if (dataView[i].date >= curTime &&
-          dataView[i].date <= currentTimeAfterWeek) {
-        sortdData.add(dataView[i]);
+      if (dataView[i].date >= curTime && dataView[i].date <= timeAfterWeek) {
+        data.add(dataView[i]);
       }
     }
-    data.value = sortdData;
+
     isFetched.value = true;
   }
 
-  filterDataByDay(DateTime date) {
+  void filterDataByDay(DateTime date) {
     isFetched.value = false;
+    data.value = [];
+
     int curTime = date.millisecondsSinceEpoch;
     textEditingController.text = DateFormat('d MMM, y')
         .format(DateTime.fromMillisecondsSinceEpoch(curTime));
-    List<Data> sortdData = [];
+
     for (int i = 0; i < dataView.length; i++) {
       if (dataView[i].date == curTime) {
-        sortdData.add(dataView[i]);
+        data.add(dataView[i]);
       }
     }
-    data.value = sortdData;
+
     isFetched.value = true;
   }
 
-  filterDataByMonth(DateTime date) {
+  void filterDataByMonth(DateTime date) {
     isFetched.value = false;
+    data.value = [];
     int firstDay = DateTime(date.year, date.month, 1).millisecondsSinceEpoch;
     int lastDay = DateTime(date.year, date.month + 1, 1)
         .subtract(const Duration(days: 1))
         .millisecondsSinceEpoch;
 
-    List<Data> sortdData = [];
     for (int i = 0; i < dataView.length; i++) {
       if (dataView[i].date >= firstDay && dataView[i].date <= lastDay) {
-        sortdData.add(dataView[i]);
+        data.add(dataView[i]);
       }
     }
-    data.value = sortdData;
+
     isFetched.value = true;
   }
 
-  onDropdownSelect(String newValue) {
+  void onDropdownSelect(String newValue) {
     sortDataValue.value = newValue;
     if (newValue == 'Week') {
       fliterDataByWeek(DateTime.now());
@@ -113,5 +122,50 @@ class HomePageController extends GetxController {
     } else {
       getData();
     }
+  }
+
+  Future<void> checkUserConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+        isInternetAvailable.value = true;
+      }
+    } on SocketException catch (_) {
+      isInternetAvailable.value = false;
+      isFetched.value = true;
+    }
+  }
+
+  void applyFilter(DateTime date) {
+    if (sortDataValue.value == "Week") {
+      fliterDataByWeek(date);
+    } else if (sortDataValue.value == "Day") {
+      filterDataByDay(date);
+    }
+  }
+
+  Future<dynamic> selectYear(BuildContext context, int monthIndex) {
+    selectedMonth.value = months[monthIndex];
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Select Year"),
+          content: SizedBox(
+            width: 300,
+            height: 300,
+            child: YearPicker(
+              firstDate: DateTime(DateTime.now().year - 10, 1),
+              lastDate: DateTime(DateTime.now().year + 10, 1),
+              selectedDate: DateTime.now(),
+              onChanged: (DateTime dateTime) {
+                filterDataByMonth(DateTime(dateTime.year, monthIndex + 1));
+                Navigator.pop(context);
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 }

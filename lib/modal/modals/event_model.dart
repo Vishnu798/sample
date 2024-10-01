@@ -47,7 +47,7 @@ class Data {
       };
 }
 
-getDate(String date) {
+int getDate(String date) {
   try {
     List<String> seperateDate = date.split('-');
     if (seperateDate[1].length == 1) {
